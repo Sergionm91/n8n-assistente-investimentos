@@ -43,7 +43,7 @@
         "messages": {
           "values": [
             {
-              "content": "=Você é um consultor financeiro. Gere uma mensagem curta (máximo de 3 a 4 linhas) e objetiva para o cliente recomendando a melhor opção de investimento.\n\n- Nome: {{ $json.clientes_processados[0].nome }}\n- Perfil: {{ $json.clientes_processados[0].perfil }}\n- Saldo: {{ $json.clientes_processados[0].saldo }}\n- Opções de Investimento: {{ JSON.stringify($json.clientes_processados[0].opcoes) }}\n\nInstruções de formatação:\n- Trate o cliente pelo primeiro nome.\n- Destaque o perfil de investimento e recomende o produto mais alinhado de forma simples.\n- Sem enrolação ou textos longos, vá direto ao ponto."
+              "content": "=Você é um consultor financeiro. Gere uma mensagem curta (máximo de 3 a 4 linhas) e objetiva para o cliente recomendando a melhor opção de investimento.\n\n- Nome: {{ $json.nome }}\n- Perfil: {{ $json.perfil }}\n- Saldo: {{ $json.saldo }}\n- Opções de Investimento: {{ JSON.stringify($json.opcoes) }}\n\nInstruções de formatação:\n- Trate o cliente pelo primeiro nome.\n- Destaque o perfil de investimento e recomende o produto mais alinhado de forma simples.\n- Sem enrolação ou textos longos, vá direto ao ponto."
             }
           ]
         },
@@ -68,7 +68,7 @@
     {
       "parameters": {
         "fromEmail": "sergio.nmiranda91@gmail.com",
-        "toEmail": "={{ $('Webhook').item.json.body.clientes[0].email }}",
+        "toEmail": "=={{ $json.email }}",
         "html": "={{ $json.mensagem }}",
         "options": {}
       },
@@ -103,7 +103,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 1. Obter o CSV do HTTP Request\nconst csvText = $(\"HTTP Request\").first().json.data;\n\nconst linhas = csvText.trim().split('\\n').map(l => l.trim()).filter(l => l.length > 0);\nconst cabecalhos = linhas[0].split(',').map(h => h.trim());\n\nconst investimentos = linhas.slice(1).map(linha => {\n  const valores = linha.split(',').map(v => v.trim());\n  const objeto = {};\n  cabecalhos.forEach((cabecalho, index) => {\n    objeto[cabecalho] = valores[index];\n  });\n  return objeto;\n});\n\n// 2. Capturar clientes do Webhook\nconst dadosWebhook = $(\"Webhook\").first().json;\nconst clientes = dadosWebhook.body?.clientes || dadosWebhook.clientes || [];\n\n// 3. Montar dados consolidados dos clientes com suas opções\nconst dadosConsolidados = clientes.map(cliente => {\n  const opcoesRecomendadas = investimentos.filter(\n    inv => inv.perfil.toLowerCase() === cliente.perfil.toLowerCase()\n  );\n  return {\n    nome: cliente.nome,\n    email: cliente.email,\n    saldo: cliente.saldo,\n    perfil: cliente.perfil,\n    opcoes: opcoesRecomendadas\n  };\n});\n\n// Retorna TUDO em um único item para fazer apenas 1 chamada na API do Gemini\nreturn [{ json: { clientes_processados: dadosConsolidados } }];"
+        "jsCode": "// 1. Obter o CSV do HTTP Request\nconst csvText = $(\"HTTP Request\").first().json.data;\n\nconst linhas = csvText.trim().split('\\n').map(l => l.trim()).filter(l => l.length > 0);\nconst cabecalhos = linhas[0].split(',').map(h => h.trim());\n\nconst investimentos = linhas.slice(1).map(linha => {\n  const valores = linha.split(',').map(v => v.trim());\n  const objeto = {};\n  cabecalhos.forEach((cabecalho, index) => {\n    objeto[cabecalho] = valores[index];\n  });\n  return objeto;\n});\n\n// 2. Capturar clientes do Webhook\nconst dadosWebhook = $(\"Webhook\").first().json;\nconst clientes = dadosWebhook.body?.clientes || dadosWebhook.clientes || [];\n\n// 3. Montar dados consolidados dos clientes com suas opções\nconst dadosConsolidados = clientes.map(cliente => {\n  const opcoesRecomendadas = investimentos.filter(\n    inv => inv.perfil.toLowerCase() === cliente.perfil.toLowerCase()\n  );\n  return {\n    nome: cliente.nome,\n    email: cliente.email,\n    saldo: cliente.saldo,\n    perfil: cliente.perfil,\n    opcoes: opcoesRecomendadas\n  };\n});\n\n// Retorna TUDO em um único item para fazer apenas 1 chamada na API do Gemini\n// Substitua esta linha final:\n// return [{ json: { clientes_processados: dadosConsolidados } }];\n\n// Por esta:\nreturn dadosConsolidados.map(cliente => ({ json: cliente }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -150,7 +150,7 @@
     {
       "parameters": {
         "fromEmail": "sergio.nmiranda91@gmail.com",
-        "toEmail": "={{ $('Webhook').item.json.body.clientes[0].email }}",
+        "toEmail": "=={{ $json.email }}",
         "subject": "e-mail falso",
         "html": "={{ $json.mensagem }}",
         "options": {}
@@ -258,7 +258,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "1ee6fce2-1a95-4d59-b078-21c423aa961a",
+  "versionId": "e8a70e98-fb16-4c97-9a28-011f5d700a12",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d8cd390b645145cc64d6cb2001e42de517b287a37f44e2b9e6a617c0ae10a3ea"
