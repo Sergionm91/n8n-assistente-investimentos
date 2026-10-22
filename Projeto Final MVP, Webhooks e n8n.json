@@ -1,0 +1,269 @@
+{
+  "name": "Projeto Final MVP, Webhooks e n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Clientes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "718efc06-1e80-4077-8057-2ea14405b8da",
+      "name": "Webhook",
+      "webhookId": "564b5092-7081-4bcb-bea6-7fa47c6c6a90"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        208,
+        0
+      ],
+      "id": "19278d86-4c3f-4961-8c4b-64a62b084493",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-flash-latest",
+          "mode": "list",
+          "cachedResultName": "models/gemini-flash-latest"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Você é um consultor financeiro. Gere uma mensagem curta (máximo de 3 a 4 linhas) e objetiva para o cliente recomendando a melhor opção de investimento.\n\n- Nome: {{ $json.clientes_processados[0].nome }}\n- Perfil: {{ $json.clientes_processados[0].perfil }}\n- Saldo: {{ $json.clientes_processados[0].saldo }}\n- Opções de Investimento: {{ JSON.stringify($json.clientes_processados[0].opcoes) }}\n\nInstruções de formatação:\n- Trate o cliente pelo primeiro nome.\n- Destaque o perfil de investimento e recomende o produto mais alinhado de forma simples.\n- Sem enrolação ou textos longos, vá direto ao ponto."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        688,
+        0
+      ],
+      "id": "642051fe-382c-43d2-87e5-54b0e974b166",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "UlViaZ9LIj4aWqqM",
+          "name": "Google Gemini(PaLM) Api account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "sergio.nmiranda91@gmail.com",
+        "toEmail": "={{ $('Webhook').item.json.body.clientes[0].email }}",
+        "html": "={{ $json.mensagem }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1536,
+        -112
+      ],
+      "id": "d1a46214-75ff-4304-9750-e1c7cf422531",
+      "name": "Send an Email",
+      "webhookId": "9e3c5784-a08d-4a2a-8c76-c69cbef6181d",
+      "credentials": {
+        "smtp": {
+          "id": "rY65YQvYhtPzWktV",
+          "name": "Automacao_email"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Captura a entrada do nó do Gemini\nconst item = $input.first().json;\n\n// Função para extrair APENAS o texto da mensagem de forma limpa\nfunction extrairTexto(obj) {\n  if (typeof obj === 'string') return obj;\n  if (!obj) return '';\n\n  // Se a estrutura tiver parts (padrão Gemini)\n  if (obj.content && Array.isArray(obj.content.parts)) {\n    return obj.content.parts.map(p => p.text || '').join('');\n  }\n  \n  if (typeof obj.content === 'string') return obj.content;\n  if (typeof obj.text === 'string') return obj.text;\n  if (typeof obj.output === 'string') return obj.output;\n  if (obj.message && typeof obj.message.content === 'string') return obj.message.content;\n\n  return typeof obj === 'object' ? JSON.stringify(obj) : String(obj);\n}\n\nlet rawText = extrairTexto(item);\n\n// 2. Limpa formatações Markdown (```json ... ```)\nrawText = String(rawText)\n  .replace(/```json/gi, '')\n  .replace(/```/g, '')\n  .trim();\n\n// Mantém o restante do seu fluxo para retornar a propriedade \"mensagem\"\nreturn [\n  {\n    json: {\n      nome: item.nome || \"Cliente\",\n      email: item.email || \"\",\n      mensagem: rawText\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "89184431-49a6-4e6d-bb7c-1b9cc5acefee",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Obter o CSV do HTTP Request\nconst csvText = $(\"HTTP Request\").first().json.data;\n\nconst linhas = csvText.trim().split('\\n').map(l => l.trim()).filter(l => l.length > 0);\nconst cabecalhos = linhas[0].split(',').map(h => h.trim());\n\nconst investimentos = linhas.slice(1).map(linha => {\n  const valores = linha.split(',').map(v => v.trim());\n  const objeto = {};\n  cabecalhos.forEach((cabecalho, index) => {\n    objeto[cabecalho] = valores[index];\n  });\n  return objeto;\n});\n\n// 2. Capturar clientes do Webhook\nconst dadosWebhook = $(\"Webhook\").first().json;\nconst clientes = dadosWebhook.body?.clientes || dadosWebhook.clientes || [];\n\n// 3. Montar dados consolidados dos clientes com suas opções\nconst dadosConsolidados = clientes.map(cliente => {\n  const opcoesRecomendadas = investimentos.filter(\n    inv => inv.perfil.toLowerCase() === cliente.perfil.toLowerCase()\n  );\n  return {\n    nome: cliente.nome,\n    email: cliente.email,\n    saldo: cliente.saldo,\n    perfil: cliente.perfil,\n    opcoes: opcoesRecomendadas\n  };\n});\n\n// Retorna TUDO em um único item para fazer apenas 1 chamada na API do Gemini\nreturn [{ json: { clientes_processados: dadosConsolidados } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "649f1035-7f13-4ce1-a2a2-993ae8f09564",
+      "name": "code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7ebb6d0e-5696-4788-8650-4b33e2037eeb",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "d2230a20-41fd-4a38-8c18-0c85f06a5e5d",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fromEmail": "sergio.nmiranda91@gmail.com",
+        "toEmail": "={{ $('Webhook').item.json.body.clientes[0].email }}",
+        "subject": "e-mail falso",
+        "html": "={{ $json.mensagem }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1536,
+        96
+      ],
+      "id": "4794c38a-ddeb-47ba-97a6-fe870290084d",
+      "name": "Send an Email1",
+      "webhookId": "9e3c5784-a08d-4a2a-8c76-c69cbef6181d",
+      "credentials": {
+        "smtp": {
+          "id": "rY65YQvYhtPzWktV",
+          "name": "Automacao_email"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send an Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1ee6fce2-1a95-4d59-b078-21c423aa961a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d8cd390b645145cc64d6cb2001e42de517b287a37f44e2b9e6a617c0ae10a3ea"
+  },
+  "nodeGroups": [],
+  "id": "pMqDGLfoIBfbVXb9",
+  "tags": []
+}
